@@ -70,6 +70,22 @@ The harness compares the installed and private allocators, including delayed are
 concurrent allocations. See [Trust boundaries](../docs/TRUST_BOUNDARIES.md#native-host-allocation)
 for the scope of these checks.
 
+### PyTorch feature regressions
+
+[`checks/features/`](checks/features/README.md) contains independent regression files for
+pending PyTorch and TorchAO features. Include only the relevant file and implementation
+changes in an individual feature PR. Each file asserts successful support, runs directly
+with `python`, and imports no other new test file or shared backlog helper:
+
+```bash
+source .venv/bin/activate
+python scripts/checks/features/test_pytorch_embedding.py -v
+```
+
+These opt-in tests currently fail for missing features. The directory README lists each
+feature, its dependencies and the checker setup. The TorchAO cases use a separate environment
+from the PyTorch 2.8 interoperability requirements above and download no model.
+
 ## LibTorch CUDA build
 
 `-Kcuda=true` builds the complete LibTorch backend and needs a Linux host with a CUDA-capable GPU
