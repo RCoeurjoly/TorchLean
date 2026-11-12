@@ -226,8 +226,10 @@ def _advanced_axes(node, source, indices):
     # uint8 mask index has a data-dependent result shape and is refused.
     name = _target_name(node.target)
     extents = _shape_from_arg(source)
-    if _node_dtype(source) not in _FLOATING:
-        raise NotImplementedError(f'{name} of a {_node_dtype(source)} tensor is not imported')
+    dtype = _node_dtype(source)
+    boolean_read = dtype == 'bool' and _is_op(node, ('aten.index.Tensor',))
+    if dtype not in _FLOATING and not boolean_read:
+        raise NotImplementedError(f'{name} of a {dtype} tensor is not imported')
     if len(indices) > len(extents):
         raise NotImplementedError(f'{name}: more indices than axes')
     axes = [axis for axis, index in enumerate(indices) if index is not None]

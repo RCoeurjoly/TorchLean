@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>TinyStories: gaps after Core ATen decomposition</title>
+<style>body{font:16px/1.55 system-ui;margin:2rem auto;max-width:1100px;padding:0 1rem;color:#172033}
+table{border-collapse:collapse;width:100%;margin:1rem 0}td,th{border:1px solid #ccd4df;padding:.5rem;text-align:left}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f2f5f9;padding:1rem}article{border-left:4px solid #bd4e15;padding-left:1rem}
+code{font-family:ui-monospace,monospace}.note{background:#fff4d8;padding:1rem}small{color:#526072}</style>
+<h1>TinyStories-1M: gaps after Core ATen decomposition</h1>
+<p>Measured at <code>f856d44cc1f8383b72e9743a3c83d5ea4ae721e4</code>.
+CPU TorchAO W8A8; explicit runtime token IDs and attention mask, both [1,32].</p>
+<pre>quantize_(model, Int8DynamicActivationInt8WeightConfig(version=2))
+ep = torch.export.export(model, (input_ids, attention_mask), strict=False)
+def int_mm_to_core(left, right):
+    return torch.ops.aten.mm.default(left.to(torch.int32), right.to(torch.int32))
+table = torch.export.default_decompositions()
+table[torch.ops.aten._int_mm.default] = int_mm_to_core
+core = ep.run_decompositions(table)</pre>
+<p>PyTorch documents this <a href="https://docs.pytorch.org/docs/2.15/user_guide/torch_compiler/export.html#export-ir-training-vs-inference">export/decomposition workflow</a>.
+TorchLean's importer accepts default export and Core ATen forms; no TorchLean runtime code was changed.</p>
+<h2>Observed frontend and native IR gaps</h2><article><h3>aten.index.Tensor</h3><p>1 source calls require this unsupported contract. Stage: <strong>frontend_lowering</strong>. Dtype: see example. Core ATen operator.</p><pre>[
+  {
+    &quot;name&quot;: &quot;index&quot;,
+    &quot;op&quot;: &quot;call_function&quot;,
+    &quot;target&quot;: &quot;aten.index.Tensor&quot;,
+    &quot;runtime_dependent&quot;: true,
+    &quot;result&quot;: {
+      &quot;shape&quot;: [
+        1,
+        1,
+        1,
+        32
+      ],
+      &quot;dtype&quot;: &quot;torch.bool&quot;
+    },
+    &quot;dependencies&quot;: [
+      &quot;_to_copy&quot;,
+      &quot;unsqueeze_3&quot;,
+      &quot;unsqueeze_12&quot;
+    ],
+    &quot;core_tag&quot;: true,
+    &quot;status&quot;: &quot;unsupported&quot;,
+    &quot;exception&quot;: &quot;NotImplementedError&quot;,
+    &quot;message&quot;: &quot;aten.index.Tensor of a bool tensor is not imported&quot;,
+    &quot;source_node&quot;: &quot;index&quot;,
+    &quot;operator&quot;: &quot;aten.index.Tensor&quot;
+  }
+]</pre></article><article><h3>aten.mm.default</h3><p>49 source calls require this unsupported contract. Stage: <strong>native_ir_import</strong>. Dtype: torch.int32. Core ATen operator.</p><pre>[
+  {
+    &quot;source_node&quot;: &quot;mm&quot;,
+    &quot;operator&quot;: &quot;aten.mm.default&quot;,
+    &quot;argument_contract&quot;: [
+      {
+        &quot;shape&quot;: [
+          32,
+          64
+        ],
+        &quot;dtype&quot;: &quot;torch.int32&quot;
+      },
+      {
+        &quot;shape&quot;: [
+          64,
+          64
+        ],
+        &quot;dtype&quot;: &quot;torch.int32&quot;
+      }
+    ],
+    &quot;keywords&quot;: {},
+    &quot;result&quot;: {
+      &quot;shape&quot;: [
+        32,
+        64
+      ],
+      &quot;dtype&quot;: &quot;torch.int32&quot;
+    },
+    &quot;payload_elements&quot;: 8192,
+    &quot;status&quot;: &quot;native_ir_refused&quot;,
+    &quot;checks&quot;: [
+      {
+        &quot;message&quot;: &quot;IR import: the record matmul does not decode&quot;,
+        &quot;name&quot;: &quot;structure&quot;,
+        &quot;status&quot;: &quot;failed&quot;
+      },
+      {
+        &quot;message&quot;: &quot;IR import: the record matmul does not decode&quot;,
+        &quot;name&quot;: &quot;types&quot;,
+        &quot;status&quot;: &quot;failed&quot;
+      },
+      {
+        &quot;message&quot;: &quot;IR import: the record matmul does not decode&quot;,
+        &quot;name&quot;: &quot;execute&quot;,
+        &quot;status&quot;: &quot;failed&quot;
+      },
+      {
+        &quot;message&quot;: &quot;IR import: the record matmul does not decode&quot;,
+        &quot;name&quot;: &quot;compare_bitwise&quot;,
+        &quot;status&quot;: &quot;failed&quot;
+      }
+    ]
+  },
+  {
+    &quot;source_node&quot;: &quot;mm_4&quot;,
+    &quot;operator&quot;: &quot;aten.mm.default&quot;,
+    &quot;argument_contract&quot;: [
+      {
+        &quot;shape&quot;: [
+          32,
+          64
+        ],
+        &quot;dtype&quot;: &quot;torch.int32&quot;
+      },
+      {
+        &quot;shape&quot;: [
+          64,
+          256
+        ],
+        &quot;dtype&quot;: &quot;torch.int32&quot;
+      }
+    ],
+    &quot;keywords&quot;: {},
+    &quot;result&quot;: {
+      &quot;shape&quot;: [
+        32,
+        256
+      ],
+      &quot;dtype&quot;: &quot;torch.int32&quot;
+    },
+    &quot;payload_elements&quot;: 26624,
+    &quot;status&quot;: &quot;native_ir_refused&quot;,
+    &quot;checks&quot;: [
+      {
+        &quot;message&quot;: &quot;IR import: the record matmul does not decode&quot;,
+        &quot;name&quot;: &quot;structure&quot;,
+        &quot;status&quot;: &quot;failed&quot;
+      },
+      {
+        &quot;message&quot;: &quot;IR import: the record matmul does not decode&quot;,
+        &quot;name&quot;: &quot;types&quot;,
+        &quot;status&quot;: &quot;failed&quot;
+      },
+      {
+        &quot;message&quot;: &quot;IR import: the record matmul does not decode&quot;,
+        &quot;name&quot;: &quot;execute&quot;,
+        &quot;status&quot;: &quot;failed&quot;
+      },
+      {
+        &quot;message&quot;: &quot;IR import: the record matmul does not decode&quot;,
+        &quot;name&quot;: &quot;compare_bitwise&quot;,
+        &quot;status&quot;: &quot;failed&quot;
+      }
+    ]
+  },
+  {
+    &quot;source_node&quot;: &quot;mm_5&quot;,
+    &quot;operator&quot;: &quot;aten.mm.default&quot;,
+    &quot;argument_contract&quot;: [
+      {
+        &quot;shape&quot;: [
+          32,
+          256
+        ],
+        &quot;dtype&quot;: &quot;torch.int32&quot;
+      },
+      {
+        &quot;shape&quot;: [
+          256,
+          64
+        ],
+        &quot;dtype&quot;: &quot;torch.int32&quot;
+      }
+    ],
+    &quot;keywords&quot;: {},
+    &quot;result&quot;: {
+      &quot;shape&quot;: [
+        32,
+        64
+      ],
+      &quot;dtype&quot;: &quot;torch.int32&quot;
+    },
+    &quot;payload_elements&quot;: 26624,
+    &quot;status&quot;: &quot;native_ir_refused&quot;,
+    &quot;checks&quot;: [
+      {
+        &quot;message&quot;: &quot;IR import: the record matmul does not decode&quot;,
+        &quot;name&quot;: &quot;structure&quot;,
+        &quot;status&quot;: &quot;failed&quot;
+      },
+      {
+        &quot;message&quot;: &quot;IR import: the record matmul does not decode&quot;,
+        &quot;name&quot;: &quot;types&quot;,
+        &quot;status&quot;: &quot;failed&quot;
+      },
+      {
+        &quot;message&quot;: &quot;IR import: the record matmul does not decode&quot;,
+        &quot;name&quot;: &quot;execute&quot;,
+        &quot;status&quot;: &quot;failed&quot;
+      },
+      {
+        &quot;message&quot;: &quot;IR import: the record matmul does not decode&quot;,
+        &quot;name&quot;: &quot;compare_bitwise&quot;,
+        &quot;status&quot;: &quot;failed&quot;
+      }
+    ]
+  }
+]</pre></article>
+<p>Decomposition removes the raw graph's TorchAO calibration/quantization calls, tensor-subclass accessors,
+in-place additions and in-place detaches. Their source counts before/after decomposition are in the JSON report.
+Embedding remains present and is recognized; the export path does not have the live-weight compiler refusal.</p>
+<p class="note">Whole-model import: <strong>unsupported</strong>.
+aten.index.Tensor of a bool tensor is not imported.
+The native INT32 matrix-product refusal appears after isolating the frontend indexing blocker.
+Local rule recognition alone does not establish native IR acceptance or numerical equivalence.</p>
+<h2>Is this exactly the “~180 operators”?</h2>
+<p>The graph has 34 distinct Core-tagged operators.
+All numerical ATen calls are Core-tagged. The non-Core scaffolding consists of metadata assertions and tuple projections.
+The raw graph's 49 <code>aten._int_mm.default</code> calls become 49 Core <code>aten.mm.default</code> calls.
+Each product explicitly widens both INT8 operands to INT32 first; merely renaming the INT8 operation would change its result dtype.</p>
+<p>A small control uses the same decomposition and agrees with <code>_int_mm</code> in PyTorch.
+TorchLean refuses the INT32 matrix-product IR record. Supporting an operator name alone does not establish
+support for every dtype or accumulator contract.</p>
+<h2>Quantized behavior preserved in PyTorch</h2>
+<p>All 49 linear layers use INT8 weights and dynamic per-token INT8 activations.
+The decomposed graph expresses those 49 products as INT8→INT32 casts followed by INT32 matrix multiplication.
+This reference representation does not prescribe 32-bit storage or multipliers for an eventual FPGA implementation.</p>
+<table><tr><th>Input case</th><th>Raw export vs eager</th><th>Decomposed vs eager</th><th>Saved/reloaded core vs eager</th></tr><tr><td>dense</td><td>True</td><td>True</td><td>True</td></tr><tr><td>padded_tail</td><td>True</td><td>True</td><td>True</td></tr><tr><td>different_tokens</td><td>True</td><td>True</td><td>True</td></tr></table>
+<p>Equality above compares every output byte. This is sampled PyTorch equivalence, not native TorchLean full-model execution.</p>
+<h2>Conversion and native-check evidence</h2>
+<p>After isolating only the frontend refusal: <strong>native_ir_refused</strong>.
+This diagnostic still contains the INT32 matrix products and exposes their native IR import refusal.</p>
+<p>Diagnostic residual conversion: <strong>converted</strong>.
+Diagnostic residual only: refused calls are declared runtime inputs. Their implementations and full-model execution are NOT checked.</p>
+<p>Native source capsules: {&#x27;not_run&#x27;: 14, &#x27;compared&#x27;: 96, &#x27;unsupported&#x27;: 1, &#x27;numerical_mismatch&#x27;: 7, &#x27;native_ir_refused&#x27;: 3}. Runtime cutpoints use real PyTorch intermediate values;
+frozen ancestor expressions retain their source operations. Payloads above 100000 elements are explicitly not run.</p>
+<h3>Native numerical mismatches</h3>
+<table><tr><th>Source case</th><th>Numerical operator</th><th>Different output words</th><th>Maximum absolute error</th></tr><tr><td><code>native_layer_norm</code></td><td><code>aten.native_layer_norm.default</code></td><td>1439</td><td>7.152557373046875e-07</td></tr><tr><td><code>getitem</code></td><td><code>aten.native_layer_norm.default</code></td><td>1439</td><td>7.152557373046875e-07</td></tr><tr><td><code>bmm</code></td><td><code>aten.bmm.default</code></td><td>6030</td><td>9.5367431640625e-07</td></tr><tr><td><code>_softmax</code></td><td><code>aten._softmax.default</code></td><td>4948</td><td>1.1920928955078125e-07</td></tr><tr><td><code>bmm_1</code></td><td><code>aten.bmm.default</code></td><td>1168</td><td>4.470348358154297e-08</td></tr><tr><td><code>pow_1</code></td><td><code>aten.pow.Tensor_Scalar</code></td><td>2075</td><td>1.1920928955078125e-07</td></tr><tr><td><code>tanh</code></td><td><code>aten.tanh.default</code></td><td>2</td><td>7.450580596923828e-09</td></tr></table>
+<p>Layer norm and its dependent <code>getitem</code> repeat the same mismatch; they are one numerical family.
+Two <code>bmm</code> shapes also belong to one family. These sampled differences need investigation or an explicit numerical
+acceptance policy. This report does not attribute every difference to an allowed PyTorch approximation.</p>
+<p class="note">Fixing the 2 observed import gaps is not sufficient evidence of full-model bitwise correctness.
+The native comparisons above already expose numerical differences. Native full-model execution remains blocked.</p>
+<p>Untested cases and complete native check statuses are recorded in the JSON report.
+Metadata assertions are capture constraints and are not numerical kernels.</p>
+<h2>Complete source operator inventory</h2>
+<p>Raw export: 1592 nodes. Decomposed: 2704 nodes.
+Saved/reloaded: 2738 nodes; serialization adds unused layer-norm statistic projections.
+Dead projections are ignored by the ordinary importer and are not reported as gaps.</p>
+<table><tr><th>Operator</th><th>Calls</th><th>Boundary</th><th>Local rule status</th></tr><tr><td><code>&lt;built-in function getitem&gt;</code></td><td>51</td><td>Additional</td><td>Counter({&#x27;ignored_dead_projection&#x27;: 34, &#x27;recognized&#x27;: 17})</td></tr><tr><td><code>aten._assert_tensor_metadata.default</code></td><td>223</td><td>Additional</td><td>Counter({&#x27;recognized&#x27;: 223})</td></tr><tr><td><code>aten._softmax.default</code></td><td>8</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 8})</td></tr><tr><td><code>aten._to_copy.default</code></td><td>246</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 246})</td></tr><tr><td><code>aten.add.Tensor</code></td><td>117</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 117})</td></tr><tr><td><code>aten.alias.default</code></td><td>1</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 1})</td></tr><tr><td><code>aten.amax.default</code></td><td>49</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 49})</td></tr><tr><td><code>aten.amin.default</code></td><td>49</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 49})</td></tr><tr><td><code>aten.arange.start_step</code></td><td>4</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 4})</td></tr><tr><td><code>aten.bitwise_and.Tensor</code></td><td>2</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 2})</td></tr><tr><td><code>aten.bmm.default</code></td><td>16</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 16})</td></tr><tr><td><code>aten.clamp.default</code></td><td>98</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 98})</td></tr><tr><td><code>aten.clone.default</code></td><td>16</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 16})</td></tr><tr><td><code>aten.div.Tensor</code></td><td>49</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 49})</td></tr><tr><td><code>aten.embedding.default</code></td><td>2</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 2})</td></tr><tr><td><code>aten.expand.default</code></td><td>33</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 33})</td></tr><tr><td><code>aten.full.default</code></td><td>2</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 2})</td></tr><tr><td><code>aten.full_like.default</code></td><td>147</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 147})</td></tr><tr><td><code>aten.index.Tensor</code></td><td>1</td><td>Core</td><td>Counter({&#x27;unsupported&#x27;: 1})</td></tr><tr><td><code>aten.le.Tensor</code></td><td>1</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 1})</td></tr><tr><td><code>aten.maximum.default</code></td><td>98</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 98})</td></tr><tr><td><code>aten.minimum.default</code></td><td>49</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 49})</td></tr><tr><td><code>aten.mm.default</code></td><td>49</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 49})</td></tr><tr><td><code>aten.mul.Tensor</code></td><td>228</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 228})</td></tr><tr><td><code>aten.native_layer_norm.default</code></td><td>17</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 17})</td></tr><tr><td><code>aten.neg.default</code></td><td>49</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 49})</td></tr><tr><td><code>aten.permute.default</code></td><td>89</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 89})</td></tr><tr><td><code>aten.pow.Tensor_Scalar</code></td><td>8</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 8})</td></tr><tr><td><code>aten.reciprocal.default</code></td><td>49</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 49})</td></tr><tr><td><code>aten.round.default</code></td><td>49</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 49})</td></tr><tr><td><code>aten.scalar_tensor.default</code></td><td>1</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 1})</td></tr><tr><td><code>aten.slice.Tensor</code></td><td>16</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 16})</td></tr><tr><td><code>aten.tanh.default</code></td><td>8</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 8})</td></tr><tr><td><code>aten.unsqueeze.default</code></td><td>10</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 10})</td></tr><tr><td><code>aten.view.default</code></td><td>668</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 668})</td></tr><tr><td><code>aten.where.self</code></td><td>9</td><td>Core</td><td>Counter({&#x27;recognized&#x27;: 9})</td></tr></table>
+<h2>Reproduce</h2><pre>.venv/bin/python scripts/checks/tinystories_core_aten_gaps.py --snapshot /home/roland/.cache/huggingface/hub/models--roneneldan--TinyStories-1M/snapshots/77f1b168e219585646439073245fe87e56b3023e --out _out/tinystories-core-aten --report docs/TINYSTORIES_CORE_ATEN_GAPS</pre>
+<p>Full graph text, exported programs, node inventory, native capsule records and residual artifact are in
+<code>_out/tinystories-core-aten</code>. The adjacent JSON report records hashes and package versions.</p>
+<h2>Provenance</h2><pre>{
+  &quot;git_revision&quot;: &quot;f856d44cc1f8383b72e9743a3c83d5ea4ae721e4&quot;,
+  &quot;python&quot;: &quot;3.12.3&quot;,
+  &quot;packages&quot;: {
+    &quot;torch&quot;: &quot;2.15.0+cpu&quot;,
+    &quot;torchao&quot;: &quot;0.18.0+cpu&quot;,
+    &quot;transformers&quot;: &quot;5.22.2&quot;
+  },
+  &quot;checker_sha256&quot;: &quot;378716768df9d690ce793c1613ed8a9f9a9dcfce54d457887b16e0e9c2c7bc96&quot;,
+  &quot;python_frontend_sha256&quot;: {
+    &quot;python/torchlean/_emit.py&quot;: &quot;388e387328ce2ea3bb4fb096d05b729531e1c4c5951d7475159264e93d77b1dd&quot;,
+    &quot;python/torchlean/_artifact.py&quot;: &quot;b65313ad8842b2d112cce415c86cf48ad10e6b7126be728dc85ec80a99b1caaf&quot;,
+    &quot;python/torchlean/export.py&quot;: &quot;d4ee3dc0ac6ceb0df17fc80f6378bef4de800fc22a96909d37807737ca767560&quot;,
+    &quot;python/torchlean/_structure.py&quot;: &quot;e646a424b8f9ea9f21563ef1c7d66a4355ed3cc7b8ed943dc43031305b7b5317&quot;,
+    &quot;python/torchlean/_pytorch.py&quot;: &quot;f6e0ac99bed47f55fab5f96f157303505f15bf3af351d758b8aacc78e3631219&quot;,
+    &quot;python/torchlean/_compiler.py&quot;: &quot;a3ae094595c20a239fc5584cafd090a002b14e8d83429ca52631eb222bdf2fd8&quot;,
+    &quot;python/torchlean/jaxpr.py&quot;: &quot;e88f97eeeade17cf5a8c04c23917cf08d12a2f2bce7c2d3d8ccccdde4d729cb4&quot;,
+    &quot;python/torchlean/_graph.py&quot;: &quot;3fb2e18b9dc2191516f0e28a5857ce6e63eb18306070ebbaf04a693eb807d14f&quot;,
+    &quot;python/torchlean/__init__.py&quot;: &quot;8795d37d744ea41977d3b8d28fa9a75f7ef45a9875dd0d56651d51ba2365a835&quot;,
+    &quot;python/torchlean/onnx.py&quot;: &quot;89deed0a3e5f26f18ac32f8f202a22cc81522c2cc4410c1be56c7094e1a3cec0&quot;,
+    &quot;python/torchlean/state.py&quot;: &quot;9ffbbf8acebfd47cc199bb8269538e5d97bef0785bab9ffcb1ff667a6af1981c&quot;,
+    &quot;python/torchlean/_pointwise.py&quot;: &quot;b84d7b0fa3521a54a754b7aeb9461b6bf0cd22181183a53cc08c08e3e44131bc&quot;,
+    &quot;python/torchlean/_fx.py&quot;: &quot;22ba0faae31026c47a0091a354a08c9d40dcd4621a333efac18815ffcae70d67&quot;,
+    &quot;python/torchlean/_checker.py&quot;: &quot;07bbb9e6532f6aebea6bd25ed039681f4e33c03c1ce2a289887e8cac7b7c993a&quot;,
+    &quot;python/torchlean/_table.py&quot;: &quot;7b90b10b87d5137a822748478ea5916e99d3112db34cd7bcfb987af3eacd7f7d&quot;
+  },
+  &quot;diagnostic_sha256&quot;: &quot;b0632317a5a931d7ad696023ee31165561c7caa3900cf5ea322bc24101500ee9&quot;
+}</pre>
+</html>

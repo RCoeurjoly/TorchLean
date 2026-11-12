@@ -86,6 +86,18 @@ These opt-in tests currently fail for missing features. The directory README lis
 feature, its dependencies and the checker setup. The TorchAO cases use a separate environment
 from the PyTorch 2.8 interoperability requirements above and download no model.
 
+The [TinyStories Core ATen analysis](../docs/TINYSTORIES_CORE_ATEN_GAPS.html) measures
+explicit export with the default decomposition table plus `_int_mm` normalization
+to INT32 casts and Core `mm`. Reproduce it with:
+
+```bash
+python scripts/checks/tinystories_core_aten_gaps.py --snapshot /path/to/local/TinyStories-1M
+```
+
+The diagnostic writes exported programs and full evidence under `_out/tinystories-core-aten/`,
+and a JSON/HTML report under `docs/`. It uses a cached model and does not change TorchLean's
+implementation. Native numerical differences are reported separately from capture refusals.
+
 ## LibTorch CUDA build
 
 `-Kcuda=true` builds the complete LibTorch backend and needs a Linux host with a CUDA-capable GPU

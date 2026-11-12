@@ -684,7 +684,8 @@ def _block(nodes: list, input_ids: list[int], refs: list, base: int, i: int, nod
             raise NotImplementedError(refuse('a custom node without a primitive'))
         record, k = node['op'], int(node.get('output', 0))
         value = _binary(node.get('scalar'), table)
-        if value is None:
+        needs_scalar = _at_scalar(record) and _sentinel(record) not in scalarless
+        if needs_scalar and value is None:
             raise NotImplementedError(refuse(f"an operator record at "
                                              f"{_describe(node.get('scalar'))}, which is not a "
                                              'binary format'))

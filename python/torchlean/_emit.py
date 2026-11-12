@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ._artifact import _SCALAR
+from ._artifact import _SCALAR, _element
 from ._fx import (_FLOATING, _INT64, _REDUCED_FLOATS, _binary_payload, _broadcast_kind, _constant,
                   _convolution_payload, _dtype_of, _is_getattr, _is_op, _linear_payload,
                   _node_dtype, _node_shape, _normalization, _normalize_axis, _op_table,
@@ -473,8 +473,9 @@ def _emit_structure(plan, nodes, node_to_id, shape, dtype):
         first, count = axes[0], len(positions)
         moved = axes == list(range(first, first + len(axes))) and first > 0
         if op == 'index':
+            element = {'element': _element(dtype, _op_table())}
             index = _registered_node(nodes, 'gather', [{'shape': extents}, {'shape': positions},
-                                                       {'nats': axes}, {'pairs': []}, _SCALAR],
+                                                       {'nats': axes}, {'pairs': []}, element],
                                      [source, tuples], positions + rest, dtype)
             if moved:
                 order = (list(range(count, count + first)) + list(range(count)) +

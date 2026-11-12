@@ -5,6 +5,13 @@ include that single test file and its implementation changes. The tests use the
 existing TorchLean Python package and checker; they do not import another new test
 file, a shared backlog helper, or a model-specific survey.
 
+These files exercise different capture paths. For the exported and decomposed
+TinyStories inference graph, see the [Core ATen gap report](../../../docs/TINYSTORIES_CORE_ATEN_GAPS.html).
+Its current gaps are Boolean-data advanced indexing in the frontend and INT32
+matrix multiplication in native IR import. The export normalizes `_int_mm` to
+Core `mm` with explicit INT32 casts; the report also records native numerical differences. The remaining files
+are API coverage tests and are not all requirements of that export pipeline.
+
 These are pending regressions: they assert successful support and currently fail
 where support is missing. They are ordinary `unittest` tests with no expected-failure
 annotations or special runner. Once a feature works, its file becomes a passing
@@ -41,6 +48,7 @@ between calls so accidentally frozen weights cannot pass.
 | [test_pytorch_layer_norm.py](test_pytorch_layer_norm.py) | Layer normalization with live affine parameters | None |
 | [test_pytorch_embedding.py](test_pytorch_embedding.py) | Embedding lookup with live weights | None |
 | [test_pytorch_tensor_slicing.py](test_pytorch_tensor_slicing.py) | Tensor slicing | None |
+| [test_pytorch_bool_advanced_index.py](test_pytorch_bool_advanced_index.py) | Core ATen advanced indexing of Boolean data by INT64 tensors | None |
 | [test_pytorch_bool_cumsum.py](test_pytorch_bool_cumsum.py) | Boolean cumulative sum promoted to INT64 | None |
 | [test_pytorch_diff.py](test_pytorch_diff.py) | Integer differences with prepend | None |
 | [test_pytorch_new_ones.py](test_pytorch_new_ones.py) | Scalar boolean `new_ones` | None |
