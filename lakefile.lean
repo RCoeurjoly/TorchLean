@@ -231,7 +231,7 @@ lean_exe torchlean where
 
 -- Shared executable numerical formats and refinement proofs.
 require floatlib from git
-  "https://github.com/lean-dojo/FloatLib" @ "main"
+  "https://github.com/RCoeurjoly/FloatLib" @ "main"
 
 -- API documentation (HTML): `build TorchLean.Tensor:docInfo TorchLean.CUDA:docInfo
 -- TorchLean.NN:docInfo TorchLean.Verify:docInfo TorchLeanExamples:docInfo +FloatLib:docInfo`,
